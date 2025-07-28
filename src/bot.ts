@@ -249,6 +249,7 @@ client.on('interactionCreate', async interaction => {
                     .setColor(result.success ? 0x00ff00 : 0xff0000)
                     .setTitle(result.success ? '✅ Poistuttu jonosta' : '❌ Virhe')
                     .setDescription(result.message)
+                    .setFooter({ text: 'Lihabotti v1.0', iconURL: client.user?.displayAvatarURL() ?? undefined })
                     .setTimestamp();
 
                 await replyWithEmbed(interaction, embed, true);
@@ -306,7 +307,8 @@ function createStatusEmbed(): EmbedBuilder {
 
     const embed = new EmbedBuilder()
         .setColor(0x0099ff)
-        .setTitle('📊 Mythic+ Jonojen Tilanne')
+        .setTitle('Kaken Varaus kalenteri')
+        .setFooter({ text: 'Lihabotti v1.0', iconURL: client.user?.displayAvatarURL() ?? undefined })
         .setTimestamp();
 
     const tankKeys = Object.keys(status);
@@ -319,10 +321,10 @@ function createStatusEmbed(): EmbedBuilder {
         const { tank, queue } = status[key];
         const queueList = queue.players.length > 0
             ? queue.players.map((p, i) => `${i + 1}. ${p.name}`).join('\n')
-            : 'Jono tyhjä';
+            : ' - ';
 
         embed.addFields({
-            name: `🛡️ ${tank.displayName} (${queue.players.length} pelaajaa)`,
+            name: `${tank.displayName} ( ${queue.players.length} )`,
             value: `\`\`\`\n${queueList}\n\`\`\``,
             inline: true
         });
