@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon --exec ts-node src/bot.ts",
+    "dev": "nodemon --ignore bot-data.json --exec ts-node src/bot.ts",
     "build": "tsc",
     "start": "node dist/bot.js"
   },
