@@ -1,38 +1,26 @@
 // src/utils/dataManager.ts
 import * as fs from 'fs';
 import * as path from 'path';
-
-interface Player {
-    id: string;
-    name: string;
-    joinTime: Date;
-}
-
-interface Queue {
-    players: Player[];
-}
-
-interface Tank {
-    id: string;
-    name: string;
-    displayName: string;
-    addedAt: Date;
-}
-
-interface BotData {
-    tanks: Record<string, Tank>;
-    queues: Record<string, Queue>;
-}
+import { Player, Queue, Tank, BotData } from '../types/data';
 
 export class DataManager {
     private dataFile: string;
     private data: BotData;
 
+    /**
+     * Luo uusi DataManager instanssi
+     * Lataa olemassa olevan datan tai luo uuden tyhjän rakenteen
+     */
     constructor() {
         this.dataFile = path.join(process.cwd(), 'bot-data.json');
         this.data = this.loadData();
     }
 
+    /**
+     * Lataa datan JSON tiedostosta
+     * Muuntaa date stringit takaisin Date objekteiksi
+     * @returns BotData objekti
+     */
     private loadData(): BotData {
         try {
             if (fs.existsSync(this.dataFile)) {
@@ -65,6 +53,9 @@ export class DataManager {
         };
     }
 
+    /**
+     * Tallentaa datan JSON tiedostoon
+     */
     private saveData(): void {
         try {
             fs.writeFileSync(this.dataFile, JSON.stringify(this.data, null, 2));
@@ -74,7 +65,13 @@ export class DataManager {
         }
     }
 
-    // Tank management
+    /**
+     * Lisää uuden tankin järjestelmään
+     * @param userId Käyttäjän Discord ID
+     * @param tankName Tankin sisäinen nimi (lowercasena)
+     * @param displayName Tankin näyttönimi
+     * @returns Tulos objekti onnistumisesta ja viestistä
+     */
     addTank(userId: string, tankName: string, displayName: string): { success: boolean; message: string } {
         const tankKey = tankName.toLowerCase();
         
@@ -148,6 +145,15 @@ export class DataManager {
 
     getTankByKey(tankKey: string): Tank | undefined {
         return this.data.tanks[tankKey.toLowerCase()];
+    }
+
+    /**
+     * Hakee käyttäjän oman tankin
+     * @param userId Käyttäjän Discord ID
+     * @returns Tank objekti tai undefined jos ei löydy
+     */
+    getUserTank(userId: string): Tank | undefined {
+        return Object.values(this.data.tanks).find(tank => tank.id === userId);
     }
 
     isTankOwner(userId: string, tankKey: string): boolean {
@@ -300,6 +306,16 @@ export class DataManager {
         });
 
         return status;
+    }
+
+    /**
+     * Palauttaa jonon pituuden
+     * @param tankKey Tankin avain
+     * @returns Jonossa olevien pelaajien määrä
+     */
+    getQueueLength(tankKey: string): number {
+        const queue = this.data.queues[tankKey.toLowerCase()];
+        return queue ? queue.players.length : 0;
     }
 
     // Get all tank choices for slash commands
