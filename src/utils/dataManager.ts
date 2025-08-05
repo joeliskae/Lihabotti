@@ -32,13 +32,14 @@ export class DataManager {
                     tank.addedAt = new Date(tank.addedAt);
                 });
                 
-                Object.values(parsedData.queues).forEach((queue: any) => {
-                    queue.players.forEach((player: any) => {
+                // Convert queue players date strings
+                if (parsedData.queue && parsedData.queue.players) {
+                    parsedData.queue.players.forEach((player: any) => {
                         player.joinTime = new Date(player.joinTime);
                     });
-                });
+                }
                 
-                console.log(`Loaded data with ${Object.keys(parsedData.tanks).length} tanks`);
+                console.log(`Loaded data with ${Object.keys(parsedData.tanks).length} tanks and ${parsedData.queue?.players?.length || 0} players in queue`);
                 return parsedData;
             }
         } catch (error) {
@@ -49,7 +50,7 @@ export class DataManager {
         console.log('Creating new data file');
         return {
             tanks: {},
-            queues: {}
+            queue: { players: [] }
         };
     }
 
@@ -98,14 +99,10 @@ export class DataManager {
             addedAt: new Date()
         };
 
-        this.data.queues[tankKey] = {
-            players: []
-        };
-
         this.saveData();
         return {
             success: true,
-            message: `Tankki "${displayName}" lisätty onnistuneesti! Pelaajat voivat nyt liittyä jonoon.`
+            message: `Tankki "${displayName}" lisätty onnistuneesti! Voit nyt ottaa pelaajia jonosta /next komennolla.`
         };
     }
 
@@ -127,15 +124,12 @@ export class DataManager {
             };
         }
 
-        const queueLength = this.data.queues[tankKey]?.players.length || 0;
-        
         delete this.data.tanks[tankKey];
-        delete this.data.queues[tankKey];
-
         this.saveData();
+        
         return {
             success: true,
-            message: `Tankki "${tank.displayName}" poistettu! ${queueLength > 0 ? `${queueLength} pelaajaa poistettiin jonosta.` : ''}`
+            message: `Tankki "${tank.displayName}" poistettu!`
         };
     }
 
@@ -156,46 +150,37 @@ export class DataManager {
         return Object.values(this.data.tanks).find(tank => tank.id === userId);
     }
 
+    /**
+     * Tarkistaa onko käyttäjä rekisteröity tankki
+     * @param userId Käyttäjän Discord ID
+     * @returns true jos käyttäjä on tankki, muuten false
+     */
+    isTank(userId: string): boolean {
+        return Object.values(this.data.tanks).some(tank => tank.id === userId);
+    }
+
     isTankOwner(userId: string, tankKey: string): boolean {
         const tank = this.data.tanks[tankKey.toLowerCase()];
         return tank ? tank.id === userId : false;
     }
 
-    // Queue management (similar to before but with dynamic tanks)
-    joinQueue(tankKey: string, playerId: string, playerName: string): { success: boolean; message: string; player?: Player } {
-        tankKey = tankKey.toLowerCase();
-        const tank = this.data.tanks[tankKey];
-        
-        if (!tank) {
-            return {
-                success: false,
-                message: `Tankkia "${tankKey}" ei löydy! Katso saatavilla olevat tankit komennolla /tanks`
-            };
+    /**
+     * Liittää pelaajan yhteiseen jonoon
+     */
+    joinQueue(playerId: string, playerName: string): { success: boolean; message: string; player?: Player; position?: number } {
+        // Varmistetaan että queue on olemassa
+        if (!this.data.queue) {
+            this.data.queue = { players: [] };
         }
 
-        const queue = this.data.queues[tankKey];
-
-        // Check if player is already in this queue
-        const existingPlayer = queue.players.find(p => p.id === playerId);
+        // Check if player is already in queue
+        const existingPlayer = this.data.queue.players.find(p => p.id === playerId);
         if (existingPlayer) {
+            const position = this.data.queue.players.indexOf(existingPlayer) + 1;
             return {
                 success: false,
-                message: `Olet jo ${tank.displayName}n jonossa! (Paikka ${queue.players.indexOf(existingPlayer) + 1})`
+                message: `Olet jo jonossa! Sijasi: ${position}`
             };
-        }
-
-        // Check if player is in any other queue
-        for (const [otherTankKey, otherQueue] of Object.entries(this.data.queues)) {
-            if (otherTankKey !== tankKey) {
-                const playerInOtherQueue = otherQueue.players.find(p => p.id === playerId);
-                if (playerInOtherQueue) {
-                    const otherTank = this.data.tanks[otherTankKey];
-                    return {
-                        success: false,
-                        message: `Olet jo ${otherTank.displayName}n jonossa! Poistu ensin sieltä jos haluat vaihtaa.`
-                    };
-                }
-            }
         }
 
         const player: Player = {
@@ -204,121 +189,145 @@ export class DataManager {
             joinTime: new Date()
         };
 
-        queue.players.push(player);
+        this.data.queue.players.push(player);
         this.saveData();
 
+        const position = this.data.queue.players.length;
         return {
             success: true,
-            message: `${playerName} liittyi ${tank.displayName}n jonoon! Paikka jonossa: ${queue.players.length}`,
-            player
+            message: `${playerName} liittyi jonoon! Paikka jonossa: ${position}`,
+            player,
+            position
         };
     }
 
-    getNext(tankKey: string): { success: boolean; message: string; player?: Player } {
-        tankKey = tankKey.toLowerCase();
-        const tank = this.data.tanks[tankKey];
-        const queue = this.data.queues[tankKey];
-        
-        if (!tank || !queue) {
+    /**
+     * Ottaa seuraavan pelaajan jonosta
+     * Vain tankit voivat käyttää tätä
+     */
+    getNext(userId: string): { success: boolean; message: string; player?: Player } {
+        // Tarkista onko käyttäjä tankki
+        if (!this.isTank(userId)) {
             return {
                 success: false,
-                message: `Tankkia "${tankKey}" ei löydy!`
+                message: `Vain tankit voivat käyttää tätä komentoa! Rekisteröidy tankiksi komennolla /add-tank`
             };
         }
 
-        if (queue.players.length === 0) {
+        // Varmistetaan että queue on olemassa
+        if (!this.data.queue) {
+            this.data.queue = { players: [] };
+        }
+
+        if (this.data.queue.players.length === 0) {
             return {
                 success: false,
-                message: `${tank.displayName}n jono on tyhjä!`
+                message: `Jono on tyhjä!`
             };
         }
 
-        const nextPlayer = queue.players.shift()!;
+        const nextPlayer = this.data.queue.players.shift()!;
         this.saveData();
 
         return {
             success: true,
-            message: `Seuraava pelaaja: **${nextPlayer.name}**\nJonossa jäljellä: ${queue.players.length}`,
+            message: `Seuraava pelaaja: **${nextPlayer.name}**\nJonossa jäljellä: ${this.data.queue.players.length}`,
             player: nextPlayer
         };
     }
 
-    leaveQueue(tankKey: string, playerId: string): { success: boolean; message: string} {
-        tankKey = tankKey.toLowerCase();
-        const tank = this.data.tanks[tankKey];
-        const queue = this.data.queues[tankKey];
-        
-        if (!tank || !queue) {
-            return {
-                success: false,
-                message: `Tankkia "${tankKey}" ei löydy!`
-            };
+    /**
+     * Poistaa pelaajan jonosta
+     */
+    leaveQueue(playerId: string): { success: boolean; message: string} {
+        // Varmistetaan että queue on olemassa
+        if (!this.data.queue) {
+            this.data.queue = { players: [] };
         }
 
-        const playerIndex = queue.players.findIndex(p => p.id === playerId);
+        const playerIndex = this.data.queue.players.findIndex(p => p.id === playerId);
         
         if (playerIndex === -1) {
             return {
                 success: false,
-                message: `Et ole ${tank.displayName}n jonossa!`
+                message: `Et ole jonossa!`
             };
         }
 
-        const removedPlayer = queue.players.splice(playerIndex, 1)[0];
+        const removedPlayer = this.data.queue.players.splice(playerIndex, 1)[0];
         this.saveData();
 
         return {
             success: true,
-            message: `${removedPlayer.name} poistui ${tank.displayName}n jonosta!`
+            message: `${removedPlayer.name} poistui jonosta!`
         };
     }
 
-    clearQueue(tankKey: string): { success: boolean; message: string } {
-        tankKey = tankKey.toLowerCase();
-        const tank = this.data.tanks[tankKey];
-        const queue = this.data.queues[tankKey];
-        
-        if (!tank || !queue) {
+    /**
+     * Tyhjentää jonon (vain tankit voivat käyttää)
+     */
+    clearQueue(userId: string): { success: boolean; message: string } {
+        // Tarkista onko käyttäjä tankki
+        if (!this.isTank(userId)) {
             return {
                 success: false,
-                message: `Tankkia "${tankKey}" ei löydy!`
+                message: `Vain tankit voivat tyhjentää jonon!`
             };
         }
 
-        const clearedCount = queue.players.length;
-        queue.players = [];
+        // Varmistetaan että queue on olemassa
+        if (!this.data.queue) {
+            this.data.queue = { players: [] };
+        }
+
+        const clearedCount = this.data.queue.players.length;
+        this.data.queue.players = [];
         this.saveData();
 
         return {
             success: true,
-            message: `${tank.displayName}n jono tyhjennetty! Poistettiin ${clearedCount} pelaajaa.`
+            message: `Jono tyhjennetty! Poistettiin ${clearedCount} pelaajaa.`
         };
     }
 
-    getStatus(): Record<string, { tank: Tank; queue: Queue }> {
-        const status: Record<string, { tank: Tank; queue: Queue }> = {};
+    /**
+     * Palauttaa status tiedot
+     */
+    getStatus(): { tanks: Tank[]; queue: Queue; totalPlayers: number } {
+        // Varmistetaan että queue on olemassa
+        if (!this.data.queue) {
+            this.data.queue = { players: [] };
+        }
         
-        Object.entries(this.data.tanks).forEach(([key, tank]) => {
-            status[key] = {
-                tank,
-                queue: { players: [...(this.data.queues[key]?.players ?? [])] }
-            };
-        });
-
-        return status;
+        return {
+            tanks: Object.values(this.data.tanks),
+            queue: { players: [...this.data.queue.players] },
+            totalPlayers: this.data.queue.players.length
+        };
     }
 
     /**
      * Palauttaa jonon pituuden
-     * @param tankKey Tankin avain
-     * @returns Jonossa olevien pelaajien määrä
      */
-    getQueueLength(tankKey: string): number {
-        const queue = this.data.queues[tankKey.toLowerCase()];
-        return queue ? queue.players.length : 0;
+    getQueueLength(): number {
+        if (!this.data.queue) {
+            this.data.queue = { players: [] };
+        }
+        return this.data.queue.players.length;
     }
 
-    // Get all tank choices for slash commands
+    /**
+     * Palauttaa pelaajan sijainnin jonossa
+     */
+    getPlayerPosition(playerId: string): number | null {
+        if (!this.data.queue) {
+            this.data.queue = { players: [] };
+        }
+        const index = this.data.queue.players.findIndex(p => p.id === playerId);
+        return index === -1 ? null : index + 1;
+    }
+
+    // Get all tank choices for slash commands - ei enää tarvita koska ei valita tankkia
     getTankChoices(): Array<{ name: string; value: string }> {
         return Object.values(this.data.tanks).map(tank => ({
             name: tank.displayName,

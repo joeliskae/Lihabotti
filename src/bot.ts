@@ -4,6 +4,7 @@ import { Client, GatewayIntentBits, Collection } from 'discord.js';
 import { DataManager } from './utils/dataManager';
 import { loadCommands, getCommandData } from './utils/commandLoader';
 import { CommandHandler } from './types/command';
+import { QueueScheduler } from './utils/queueScheduler'; // LISÄTTY
 
 /**
  * Discord bot client konfiguraatio
@@ -25,18 +26,36 @@ const dataManager = new DataManager();
 const commands: Collection<string, CommandHandler> = loadCommands();
 
 /**
+ * Jonon automaattinen tyhjennys scheduler
+ */
+let queueScheduler: QueueScheduler; // LISÄTTY
+
+/**
  * Bot ready event käsittelijä
  * Rekisteröi slash komennot sekä globaalisti että guildeihin
  */
 client.once('ready', async () => {
     console.log(`Logged in as ${client.user?.tag}!`);
     console.log(`Bot ID: ${client.user?.id}`);
+    
 
+    // LISÄÄ TÄMÄ: Poista kaikki globaalit komennot
+    try {
+        console.log('Poistetaan globaalit komennot...');
+        await client.application?.commands.set([]);
+        console.log('Globaalit komennot poistettu.');
+    } catch (error) {
+        console.error('Virhe globaalien komentojen poistossa:', error);
+    }
+        
+    // LISÄTTY: Käynnistä scheduler kun bot on valmis
+    queueScheduler = new QueueScheduler(client, dataManager);
+    queueScheduler.start();
+    
     const commandData = getCommandData(commands);
-
+    
     try {
         console.log('Started refreshing application (/) commands.');
-
         // Globaalit komennot otettu pois käytöstä
         // const result = await client.application?.commands.set(commandData);
         // console.log(`Successfully registered ${result?.size} commands globally.`);
@@ -44,7 +63,7 @@ client.once('ready', async () => {
     } catch (error) {
         console.error('Error registering global commands:', error);
     }
-
+    
     try {
         const guild = client.guilds.cache.first();
         if (guild) {
@@ -65,12 +84,11 @@ client.on('interactionCreate', async interaction => {
     // Käsittele autocomplete interaktiot
     if (interaction.isAutocomplete()) {
         const command = commands.get(interaction.commandName);
-        
         if (!command || !command.autocomplete) {
             console.error(`No autocomplete handler found for command ${interaction.commandName}`);
             return;
         }
-
+        
         try {
             await command.autocomplete(interaction, dataManager);
         } catch (error) {
@@ -78,27 +96,25 @@ client.on('interactionCreate', async interaction => {
         }
         return;
     }
-
+    
     // Käsittele chat input komennot
     if (interaction.isChatInputCommand()) {
         const command = commands.get(interaction.commandName);
-        
         if (!command) {
             console.error(`No command matching ${interaction.commandName} was found.`);
             return;
         }
-
+        
         try {
-            await command.execute(interaction, dataManager);
+            await command.execute(interaction, dataManager, client);
         } catch (error) {
             console.error(`Error executing command ${interaction.commandName}:`, error);
-            
             // Yritä lähettää virheilmoitus käyttäjälle
             const errorMessage = {
                 content: 'Tapahtui virhe komennon suorittamisessa!',
                 ephemeral: true
             };
-
+            
             if (interaction.replied || interaction.deferred) {
                 await interaction.followUp(errorMessage);
             } else {
@@ -106,6 +122,23 @@ client.on('interactionCreate', async interaction => {
             }
         }
     }
+});
+
+// LISÄTTY: Sammuta scheduler kun bot suljetaan
+process.on('SIGINT', () => {
+    console.log('Sammutetaan bot...');
+    if (queueScheduler) {
+        queueScheduler.stop();
+    }
+    process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+    console.log('Sammutetaan bot...');
+    if (queueScheduler) {
+        queueScheduler.stop();
+    }
+    process.exit(0);
 });
 
 /**

@@ -35,11 +35,11 @@ export interface Tank {
 }
 
 /**
- * Botin koko datan rakenne
+ * Botin koko datan rakenne - yksi yhteinen jono kaikille tankeille
  */
 export interface BotData {
     /** Kaikki tankit avain-arvo pareina */
     tanks: Record<string, Tank>;
-    /** Kaikki jonot avain-arvo pareina */
-    queues: Record<string, Queue>;
+    /** Yksi yhteinen jono kaikille tankeille */
+    queue: Queue;
 }

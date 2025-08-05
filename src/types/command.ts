@@ -1,5 +1,5 @@
 // src/types/command.ts
-import { ChatInputCommandInteraction, SlashCommandBuilder, SlashCommandOptionsOnlyBuilder, AutocompleteInteraction } from 'discord.js';
+import { ChatInputCommandInteraction, SlashCommandBuilder, SlashCommandOptionsOnlyBuilder, AutocompleteInteraction, Client } from 'discord.js';
 import { DataManager } from '../utils/dataManager';
 
 /**
@@ -17,7 +17,7 @@ export interface CommandHandler {
      * @param interaction Discord interaktio
      * @param dataManager Tietojen hallinta
      */
-    execute(interaction: ChatInputCommandInteraction, dataManager: DataManager): Promise<void>;
+    execute(interaction: ChatInputCommandInteraction, dataManager: DataManager, client?: Client): Promise<void>;
     
     /**
      * Käsittelee autocompletion (valinnainen)

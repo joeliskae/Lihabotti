@@ -13,7 +13,6 @@ export async function sendChannelAndUserMessage(
   }
 
   // Muodosta viesti, jossa mainitaan käyttäjä
-  console.log(next);
   try {
       const messageContent = `<@${next.id.toString()}> ${content}`;
       const sentMessage = await channel.send(messageContent);

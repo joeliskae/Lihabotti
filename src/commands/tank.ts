@@ -56,12 +56,11 @@ export const removeTankCommand: CommandHandler = {
     async execute(interaction: ChatInputCommandInteraction, dataManager: DataManager) {
         const tankName = interaction.options.getString('nimi')!;
         const tank = dataManager.getTankByKey(tankName);
-        const queueLength = tank ? dataManager.getQueueLength(tank.name) : 0;
         
         const result = dataManager.removeTank(interaction.user.id, tankName);
 
         if (result.success && tank) {
-            const embed = createTankRemovedEmbed(tank.displayName, queueLength);
+            const embed = createTankRemovedEmbed(tank.displayName, 0); // Ei enää yksittäisiä jonoja
             await replyWithEmbed(interaction, embed, true);
         } else {
             const embed = createErrorEmbed('Tankin poistaminen epäonnistui', result.message);

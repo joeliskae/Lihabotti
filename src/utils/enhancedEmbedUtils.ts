@@ -76,11 +76,11 @@ export function createTankAddedEmbed(tankName: string): EmbedBuilder {
     return new EmbedBuilder()
         .setColor(Colors.TANK)
         .setTitle(`Tankki lisätty`)
-        .setDescription(`**${tankName}** on nyt valmis ottamaan pelaajia jonoon!`)
+        .setDescription(`**${tankName}** on nyt valmis ottamaan pelaajia jonosta!`)
         .addFields(
             {
                 name: ` `,
-                value: '• Pelaajat voivat liittyä jonoosi `/jono` komennolla\n• Käytä `/next` ottaaksesi seuraavan pelaajan\n• Seuraa tilannetta `/status` komennolla',
+                value: '• Pelaajat voivat liittyä yhteiseen jonoon `/jono` komennolla\n• Käytä `/next` ottaaksesi seuraavan pelaajan\n• Seuraa tilannetta `/status` komennolla',
                 inline: false
             }
         )
@@ -97,14 +97,6 @@ export function createTankRemovedEmbed(tankName: string, queueCount: number): Em
         .setTitle(`${Icons.WARNING} Tankki poistui palveluksesta`)
         .setDescription(`**${tankName}** on poistettu järjestelmästä.`)
         .setTimestamp();
-
-    if (queueCount > 0) {
-        embed.addFields({
-            name: `${Icons.INFO} Jonon tiedot`,
-            value: `${queueCount} pelaajaa poistettiin jonosta automaattisesti.`,
-            inline: false
-        });
-    }
 
     return embed;
 }
@@ -132,7 +124,7 @@ export function createTanksListEmbed(tanks: Tank[]): EmbedBuilder {
     }).join('\n\n');
 
     embed
-        .setDescription(tankList)
+        .setDescription(`${tankList}\n\n*Kaikki tankit jakavat yhteisen jonon!*`)
 
     return embed;
 }
@@ -168,11 +160,10 @@ export function createNextPlayerEmbed(playerName: string, remainingCount: number
     return new EmbedBuilder()
         .setColor(Colors.SUCCESS)
         .setTitle(`Seuraava kusipää kutsuttu peleille!`)
-        .setDescription(`*Tankkaisivat nääki saatana joskus*`)
         .addFields(
             {
                 name: `Jonon tilanne`,
-                value: `**${remainingCount}** pelaajaa`,
+                value: `**${remainingCount}** pelaajaa jonossa`,
                 inline: false
             },
         )
@@ -186,15 +177,15 @@ export function createEmptyQueueEmbed(tankName: string): EmbedBuilder {
     return new EmbedBuilder()
         .setColor(Colors.WARNING)
         .setTitle(`Jono on tyhjä`)
-        .setDescription(`**${tankName}**n jono on tällä hetkellä tyhjä.`)
+        .setDescription(`Jono on tällä hetkellä tyhjä.`)
         .setTimestamp();
 }
 
 /**
- * Luo status embed näyttämään kaikkien tankkien tilanne
+ * Luo status embed näyttämään yhteisen jonon ja tankkien tilanne
  */
 export function createStatusEmbed(
-    status: Record<string, { tank: Tank; queue: { players: Player[] } }>,
+    status: { tanks: Tank[]; queue: { players: Player[] }; totalPlayers: number },
     client?: { user?: { displayAvatarURL(): string } }
 ): EmbedBuilder {
     const embed = new EmbedBuilder()
@@ -203,45 +194,37 @@ export function createStatusEmbed(
         .setFooter(createFooter(client))
         .setTimestamp();
 
-    const tankKeys = Object.keys(status);
-    
-    if (tankKeys.length === 0) {
+    if (status.tanks.length === 0) {
         embed
             .setDescription(`${Icons.EMPTY} **Ei tankkeja palveluksessa!**\n\nLisää itsesi tankiksi komennolla \`/add-tank\``)
             .setColor(Colors.INFO);
         return embed;
     }
 
-    // Laske tilastot
-    const totalPlayers = Object.values(status).reduce((sum, { queue }) => sum + queue.players.length, 0);
-    const activeTanks = Object.values(status).filter(({ queue }) => queue.players.length > 0).length;
+    // Tankkien lista
+    const tankList = status.tanks.map((tank, index) => {
+        const crown = index === 0 ? Icons.CROWN : Icons.TANK;
+        return `${crown} ${tank.displayName}`;
+    }).join('\n');
 
-    embed.setDescription(
-        `Yv av jono!!`
-    );
+    embed.setDescription(`**Saatavilla olevat tankit:**\n${tankList}\n\n**Jono:**`);
 
-    tankKeys.forEach(key => {
-        const { tank, queue } = status[key];
-        const playerCount = queue.players.length;
-        
-        // Määritä väri jonon koon mukaan
-        let statusIcon: string = Icons.CRY;
-        if (playerCount > 0) statusIcon = Icons.SUCCESS;
-        if (playerCount >= 5) statusIcon = Icons.FIRE;
+    // Yhteisen jonon tilanne
+    const queueList = status.queue.players.length > 0
+        ? status.queue.players.slice(0, 15).map((p, i) => {
+            const position = i + 1;
+            const medal = position === 1 ? '🥇' : position === 2 ? '🥈' : position === 3 ? '🥉' : `${position}.`;
+            return `${medal} ${p.name}`;
+        }).join('\n') + (status.queue.players.length > 15 ? `\n... ja ${status.queue.players.length - 15} muuta` : '')
+        : 'Dead game...';
 
-        const queueList = queue.players.length > 0
-            ? queue.players.slice(0, 8).map((p, i) => {
-                const position = i + 1;
-                const medal = position === 1 ? '🥇' : position === 2 ? '🥈' : position === 3 ? '🥉' : `${position}.`;
-                return `${medal} ${p.name}`;
-            }).join('\n') + (queue.players.length > 8 ? `\n... ja ${queue.players.length - 8} muuta` : '')
-            : 'Dead game...';
+    const statusIcon = status.totalPlayers === 0 ? Icons.CRY : 
+                      status.totalPlayers >= 10 ? Icons.FIRE : Icons.SUCCESS;
 
-        embed.addFields({
-            name: `${statusIcon} ${tank.displayName} (${playerCount})`,
-            value: `\`\`\`${queueList}\`\`\``,
-            inline: true
-        });
+    embed.addFields({
+        name: `${statusIcon} = ${status.totalPlayers} pelaajaa`,
+        value: `\`\`\`${queueList}\`\`\``,
+        inline: false
     });
 
     return embed;
@@ -253,8 +236,8 @@ export function createStatusEmbed(
 export function createLeaveQueueEmbed(playerName: string, tankName: string): EmbedBuilder {
     return new EmbedBuilder()
         .setColor(Colors.WARNING)
-        .setTitle(`${Icons.WARNING} Poistuttu jonosta`)
-        .setDescription(`**${playerName}** poistui **${tankName}**n jonosta.`)
+        .setTitle(`${Icons.WARNING} Poistuit jonosta`)
+        .setDescription(`**${playerName}** poistui jonosta.`)
         .setFooter(createFooter())
         .setTimestamp();
 }
@@ -266,9 +249,8 @@ export function createClearQueueEmbed(tankName: string, clearedCount: number): E
     return new EmbedBuilder()
         .setColor(Colors.SUCCESS)
         .setTitle(`${Icons.SUCCESS} Jono tyhjennetty!`)
-        .setDescription(`**${tankName}**n jono on tyhjennetty onnistuneesti.`)
         .addFields({
-            name: `${Icons.INFO} Poistetut pelaajat`,
+            name: ``,
             value: `${clearedCount} pelaajaa poistettiin jonosta.`,
             inline: false
         })

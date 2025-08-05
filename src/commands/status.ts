@@ -5,13 +5,13 @@ import { DataManager } from '../utils/dataManager';
 import { createStatusEmbed, replyWithEmbed } from '../utils/enhancedEmbedUtils';
 
 /**
- * Näyttää kaikkien tankkien jonojen tilanteen
+ * Näyttää yhteisen jonon ja kaikkien tankkien tilanteen
  */
 export const statusCommand: CommandHandler = {
     name: 'status',
     data: new SlashCommandBuilder()
         .setName('status')
-        .setDescription('Näytä jonojen tilanne'),
+        .setDescription('Näytä jonon ja tankkien tilanne'),
 
     async execute(interaction: ChatInputCommandInteraction, dataManager: DataManager) {
         const status = dataManager.getStatus();
@@ -19,26 +19,3 @@ export const statusCommand: CommandHandler = {
         await replyWithEmbed(interaction, statusEmbed, true);
     }
 };
-// .displayName} ( ${queue.players.length} )`,
-//             value: `\`\`\`\n${queueList}\n\`\`\``,
-//             inline: true
-//         });
-//     });
-
-//     return embed;
-// }
-
-// /**
-//  * Näyttää kaikkien tankkien jonojen tilanteen
-//  */
-// export const statusCommand: CommandHandler = {
-//     name: 'status',
-//     data: new SlashCommandBuilder()
-//         .setName('status')
-//         .setDescription('Näytä jonojen tilanne'),
-
-//     async execute(interaction: ChatInputCommandInteraction, dataManager: DataManager) {
-//         const statusEmbed = createStatusEmbed(dataManager, interaction.client.user);
-//         await replyWithEmbed(interaction, statusEmbed, true);
-//     }
-// };

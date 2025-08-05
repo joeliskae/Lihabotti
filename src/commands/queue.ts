@@ -1,5 +1,5 @@
 // src/commands/queue.ts
-import { SlashCommandBuilder, ChatInputCommandInteraction, AutocompleteInteraction } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, Client } from 'discord.js';
 import { CommandHandler } from '../types/command';
 import { DataManager } from '../utils/dataManager';
 import { 
@@ -12,155 +12,111 @@ import {
     replyWithEmbed 
 } from '../utils/enhancedEmbedUtils';
 import { sendChannelAndUserMessage } from '../utils/sendMessage';
+import { updateChannelTopic } from '../utils/updateTopic';
+
 
 /**
- * Liittää pelaajan tankin jonoon
+ * Liittää pelaajan yhteiseen jonoon
  */
 export const jonoCommand: CommandHandler = {
     name: 'jono',
     data: new SlashCommandBuilder()
         .setName('jono')
-        .setDescription('Liity jonoon')
-        .addStringOption(option =>
-            option.setName('tankki')
-                .setDescription('Kenen tankin jonoon haluat?')
-                .setRequired(true)
-                .setAutocomplete(true)
-        ),
+        .setDescription('Liity jonoon'),
 
-    async execute(interaction: ChatInputCommandInteraction, dataManager: DataManager) {
-        const tankKey = interaction.options.getString('tankki')!;
-        const result = dataManager.joinQueue(tankKey, interaction.user.id, interaction.user.displayName);
+    async execute(interaction: ChatInputCommandInteraction, dataManager: DataManager, client: Client) {
+        const result = dataManager.joinQueue(interaction.user.id, interaction.user.displayName);
 
-        if (result.success && result.player) {
-            const tank = dataManager.getTankByKey(tankKey);
-            const queueLength = dataManager.getQueueLength(tankKey);
-            
-            if (tank) {
-                const embed = createJoinQueueEmbed(result.player.name, tank.displayName, queueLength);
-                await replyWithEmbed(interaction, embed, true);
-            }
+        if (result.success && result.player && result.position) {
+            const embed = createJoinQueueEmbed(result.player.name, "jono", result.position);
+            await replyWithEmbed(interaction, embed, true);
+            await updateChannelTopic(client, dataManager.getQueueLength());
         } else {
             const embed = createErrorEmbed('Jonoon liittyminen epäonnistui', result.message);
             await replyWithEmbed(interaction, embed, true);
         }
-    },
-
-    async autocomplete(interaction: AutocompleteInteraction, dataManager: DataManager) {
-        const focusedOption = interaction.options.getFocused();
-        const tankChoices = dataManager.getTankChoices();
-
-        const filtered = tankChoices.filter(choice =>
-            choice.name.toLowerCase().includes(focusedOption.toLowerCase())
-        );
-
-        await interaction.respond(filtered.slice(0, 25));
     }
 };
 
 /**
- * Ottaa seuraavan pelaajan omasta jonosta (vain tankin omistajalle)
+ * Ottaa seuraavan pelaajan yhteisestä jonosta (vain tankeille) /next
  */
 export const nextCommand: CommandHandler = {
     name: 'next',
     data: new SlashCommandBuilder()
         .setName('next')
-        .setDescription('Ota seuraava pelaaja omasta jonostasi'),
+        .setDescription('Ota seuraava pelaaja jonosta (vain tankeille)'),
 
-    async execute(interaction: ChatInputCommandInteraction, dataManager: DataManager) {
-        // Etsi käyttäjän oma tankki
-        const userTank = dataManager.getUserTank(interaction.user.id);
-        
-        if (!userTank) {
-            const embed = createErrorEmbed('Ei tankkia', 'Sinulla ei ole tankkia! Lisää itsesi tankiksi komennolla `/add-tank`');
-            await replyWithEmbed(interaction, embed, true);
-            return;
-        }
-
-        const result = dataManager.getNext(userTank.name);
+    // LISÄTTY: client parametri
+    async execute(interaction: ChatInputCommandInteraction, dataManager: DataManager, client: Client) {
+        const result = dataManager.getNext(interaction.user.id);
 
         if (result.success && result.player) {
-            const remainingCount = dataManager.getQueueLength(userTank.name);
-            const embed = createNextPlayerEmbed(result.player.name, remainingCount, userTank.displayName);
+            const userTank = dataManager.getUserTank(interaction.user.id);
+            const remainingCount = dataManager.getQueueLength();
+            const embed = createNextPlayerEmbed(result.player.name, remainingCount, userTank?.displayName || 'Tankki');
             await replyWithEmbed(interaction, embed, true);
             
-            const content = `Pelaamaan saatana!! \n t: ${userTank.name}`;
+            const content = `Pelaamaan saatana!! \n -- ${userTank?.displayName || 'Salatankki'}`;
             await sendChannelAndUserMessage(interaction, result.player, content);
+            
+            // LISÄTTY: Topic päivitetään kun joku otetaan jonosta
+            await updateChannelTopic(client, dataManager.getQueueLength());
         } else {
-            const embed = createEmptyQueueEmbed(userTank.displayName);
+            const embed = result.message.includes('Vain tankit') 
+                ? createErrorEmbed('Ei käyttöoikeutta', result.message)
+                : createEmptyQueueEmbed('jono');
             await replyWithEmbed(interaction, embed, true);
         }
     }
 };
 
 /**
- * Poistaa pelaajan jonosta
+ * Poistaa pelaajan yhteisestä jonosta
  */
 export const leaveCommand: CommandHandler = {
     name: 'leave',
     data: new SlashCommandBuilder()
         .setName('leave')
-        .setDescription('Poistu jonosta')
-        .addStringOption(option =>
-            option.setName('tankki')
-                .setDescription('Mistä jonosta poistu?')
-                .setRequired(true)
-                .setAutocomplete(true)
-        ),
+        .setDescription('Poistu jonosta'),
 
-    async execute(interaction: ChatInputCommandInteraction, dataManager: DataManager) {
-        const tankKey = interaction.options.getString('tankki')!;
-        const result = dataManager.leaveQueue(tankKey, interaction.user.id);
+    // LISÄTTY: client parametri
+    async execute(interaction: ChatInputCommandInteraction, dataManager: DataManager, client: Client) {
+        const result = dataManager.leaveQueue(interaction.user.id);
 
         if (result.success) {
-            const tank = dataManager.getTankByKey(tankKey);
-            if (tank) {
-                const embed = createLeaveQueueEmbed(interaction.user.displayName, tank.displayName);
-                await replyWithEmbed(interaction, embed, true);
-            }
+            const embed = createLeaveQueueEmbed(interaction.user.displayName, "jono");
+            await replyWithEmbed(interaction, embed, true);
+            
+            // LISÄTTY: Topic päivitetään kun joku poistuu jonosta
+            await updateChannelTopic(client, dataManager.getQueueLength());
         } else {
             const embed = createErrorEmbed('Jonosta poistuminen epäonnistui', result.message);
             await replyWithEmbed(interaction, embed, true);
         }
-    },
-
-    async autocomplete(interaction: AutocompleteInteraction, dataManager: DataManager) {
-        const focusedOption = interaction.options.getFocused();
-        const tankChoices = dataManager.getTankChoices();
-
-        const filtered = tankChoices.filter(choice =>
-            choice.name.toLowerCase().includes(focusedOption.toLowerCase())
-        );
-
-        await interaction.respond(filtered.slice(0, 25));
     }
 };
 
 /**
- * Tyhjentää tankin jonon (vain tankin omistajalle)
+ * Tyhjentää yhteisen jonon (vain tankeille)
  */
 export const clearCommand: CommandHandler = {
     name: 'clear',
     data: new SlashCommandBuilder()
         .setName('clear')
-        .setDescription('Tyhjennä oma jonosi'),
+        .setDescription('Tyhjennä jono (vain tankeille)'),
 
-    async execute(interaction: ChatInputCommandInteraction, dataManager: DataManager) {
-        // Etsi käyttäjän oma tankki
-        const userTank = dataManager.getUserTank(interaction.user.id);
-        
-        if (!userTank) {
-            const embed = createErrorEmbed('Ei tankkia', 'Sinulla ei ole tankkia! Lisää itsesi tankiksi komennolla `/add-tank`');
-            await replyWithEmbed(interaction, embed, true);
-            return;
-        }
-
-        const queueLength = dataManager.getQueueLength(userTank.name);
-        const result = dataManager.clearQueue(userTank.name);
+    // LISÄTTY: client parametri
+    async execute(interaction: ChatInputCommandInteraction, dataManager: DataManager, client: Client) {
+        const queueLength = dataManager.getQueueLength();
+        const result = dataManager.clearQueue(interaction.user.id);
 
         if (result.success) {
-            const embed = createClearQueueEmbed(userTank.displayName, queueLength);
-            await replyWithEmbed(interaction, embed);
+            const embed = createClearQueueEmbed("Jono", queueLength);
+            await replyWithEmbed(interaction, embed, true);
+            
+            // LISÄTTY: Topic päivitetään kun jono tyhjennetään
+            await updateChannelTopic(client, dataManager.getQueueLength());
         } else {
             const embed = createErrorEmbed('Jonon tyhjentäminen epäonnistui', result.message);
             await replyWithEmbed(interaction, embed, true);
