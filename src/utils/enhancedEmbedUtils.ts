@@ -112,7 +112,7 @@ export function createTanksListEmbed(tanks: Tank[]): EmbedBuilder {
 
     if (tanks.length === 0) {
         embed
-            .setDescription(`${Icons.EMPTY} **Ei tankkeja saatavilla!**\n\nLiity ensimmäisenä tankkien joukkoon käyttämällä \`/add-tank\` komentoa.`)
+            .setDescription(`**Ei tankkeja saatavilla!**\n\nLiity ensimmäisenä tankkien joukkoon käyttämällä \`/add-tank\` komentoa.`)
             .setColor(Colors.INFO);
         return embed;
     }
@@ -196,7 +196,7 @@ export function createStatusEmbed(
 
     if (status.tanks.length === 0) {
         embed
-            .setDescription(`${Icons.EMPTY} **Ei tankkeja palveluksessa!**\n\nLisää itsesi tankiksi komennolla \`/add-tank\``)
+            .setDescription(`**Ei tankkeja!?**\n\nLisää itsesi tankiksi komennolla \`/add-tank\``)
             .setColor(Colors.INFO);
         return embed;
     }

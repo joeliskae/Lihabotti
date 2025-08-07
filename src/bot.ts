@@ -5,6 +5,7 @@ import { DataManager } from './utils/dataManager';
 import { loadCommands, getCommandData } from './utils/commandLoader';
 import { CommandHandler } from './types/command';
 import { QueueScheduler } from './utils/queueScheduler'; // LISÄTTY
+import { ActivityType } from 'discord.js'; // LISÄÄ TÄMÄ IMPORTTIEN JOUKKOON
 
 /**
  * Discord bot client konfiguraatio
@@ -53,6 +54,9 @@ client.once('ready', async () => {
     queueScheduler.start();
     
     const commandData = getCommandData(commands);
+
+    // Rotating status
+    setupRotatingStatus();
     
     try {
         console.log('Started refreshing application (/) commands.');
@@ -148,6 +152,24 @@ const token = process.env.DISCORD_TOKEN;
 if (!token) {
     console.error('DISCORD_TOKEN not found in environment variables!');
     process.exit(1);
+}
+
+function setupRotatingStatus() {
+    console.log("asd");
+    const statuses = [
+        { name: '/jono - to play!', type: ActivityType.Playing },
+        { name: 'u fail', type: ActivityType.Watching },
+        { name: '/status', type: ActivityType.Listening },
+        { name: 'hentai :3', type: ActivityType.Watching }
+    ];
+    
+    let currentIndex = 0;
+    
+    setInterval(() => {
+        const status = statuses[currentIndex];
+        client.user?.setActivity(status.name, { type: status.type });
+        currentIndex = (currentIndex + 1) % statuses.length;
+    }, 30000); // 30 sekuntia
 }
 
 console.log('Starting Lihabotti v1.0...');

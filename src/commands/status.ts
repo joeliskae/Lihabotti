@@ -1,5 +1,5 @@
 // src/commands/status.ts
-import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, Client } from 'discord.js';
 import { CommandHandler } from '../types/command';
 import { DataManager } from '../utils/dataManager';
 import { createStatusEmbed, replyWithEmbed } from '../utils/enhancedEmbedUtils';
@@ -12,10 +12,15 @@ export const statusCommand: CommandHandler = {
     data: new SlashCommandBuilder()
         .setName('status')
         .setDescription('Näytä jonon ja tankkien tilanne'),
-
-    async execute(interaction: ChatInputCommandInteraction, dataManager: DataManager) {
+        
+    async execute(interaction: ChatInputCommandInteraction, dataManager: DataManager, client: Client) {
+        // DEFER response heti alkuun
+        await interaction.deferReply({ ephemeral: true });
+        
         const status = dataManager.getStatus();
         const statusEmbed = createStatusEmbed(status, interaction.client);
-        await replyWithEmbed(interaction, statusEmbed, true);
+        
+        // Vaihdettu followUp:iin
+        await interaction.followUp({ embeds: [statusEmbed] });
     }
 };
